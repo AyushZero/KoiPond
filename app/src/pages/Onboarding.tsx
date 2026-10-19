@@ -6,7 +6,7 @@ interface Props {
   onIdentified: (userId: string) => void;
   hasIdentity: boolean;
   userId: string | null;
-  onRoomReady?: () => void;
+  onRoomReady?: (roomId?: string) => void;
 }
 
 export function Onboarding({ onIdentified, hasIdentity, userId, onRoomReady }: Props) {
@@ -20,6 +20,10 @@ export function Onboarding({ onIdentified, hasIdentity, userId, onRoomReady }: P
   const identify = trpc.zero.identify.useMutation();
   const createRoom = trpc.zero.createRoom.useMutation();
   const joinRoom = trpc.zero.joinRoom.useMutation();
+  const recentRooms = trpc.zero.recentRooms.useQuery(
+    { userId: userId ?? "" },
+    { enabled: !!userId && hasIdentity },
+  );
 
   const submitName = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,15 +46,15 @@ export function Onboarding({ onIdentified, hasIdentity, userId, onRoomReady }: P
     setBusy(true);
     setError("");
     try {
+      let room;
       if (tab === "create") {
         if (!roomName.trim()) return;
-        await createRoom.mutateAsync({ userId, name: roomName.trim() });
+        room = await createRoom.mutateAsync({ userId, name: roomName.trim() });
       } else {
         if (!code.trim()) return;
-        await joinRoom.mutateAsync({ userId, code: code.trim().toUpperCase() });
+        room = await joinRoom.mutateAsync({ userId, code: code.trim().toUpperCase() });
       }
-      // Home will refetch and pick up the room.
-      if (onRoomReady) onRoomReady();
+      if (onRoomReady) onRoomReady(room.id);
       else window.location.reload();
     } catch (err) {
       setError(tab === "join" ? "No room with that code." : "Couldn't create the room. Try again.");
@@ -59,12 +63,19 @@ export function Onboarding({ onIdentified, hasIdentity, userId, onRoomReady }: P
     }
   };
 
+  const rejoinRoom = async (roomId: string) => {
+    if (onRoomReady) onRoomReady(roomId);
+    else window.location.reload();
+  };
+
+  const recent = recentRooms.data ?? [];
+
   return (
     <main className="min-h-dvh flex items-center justify-center px-6" style={{ background: "var(--z-bg)" }}>
       <div className="w-full max-w-sm">
         <div className="mb-12 text-center">
           <div className="text-5xl mb-3" style={{ color: "var(--z-text)" }}>
-            Zero
+            Koi
           </div>
           <p className="italic" style={{ color: "var(--z-textMuted)" }}>
             study quietly, prove it softly
@@ -101,6 +112,50 @@ export function Onboarding({ onIdentified, hasIdentity, userId, onRoomReady }: P
           </form>
         ) : (
           <div>
+            {/* Recent rooms */}
+            {recent.length > 0 && (
+              <section className="mb-8">
+                <h3 className="text-xs uppercase tracking-[0.18em] mb-3" style={{ color: "var(--z-textMuted)" }}>
+                  Recent rooms
+                </h3>
+                <div className="flex flex-col gap-2">
+                  {recent.map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => rejoinRoom(r.id)}
+                      className="flex items-center justify-between py-3 px-4 rounded-lg text-left transition-opacity hover:opacity-85"
+                      style={{ background: "var(--z-surface)" }}
+                    >
+                      <span className="text-base" style={{ color: "var(--z-text)" }}>
+                        {r.name}
+                      </span>
+                      <span
+                        className="text-sm"
+                        style={{
+                          color: "var(--z-textMuted)",
+                          fontFamily: "'IBM Plex Mono', ui-monospace, monospace",
+                        }}
+                      >
+                        {r.code}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Separator if there are recent rooms */}
+            {recent.length > 0 && (
+              <div className="flex items-center gap-3 mb-6">
+                <div className="flex-1 h-px" style={{ background: "color-mix(in srgb, var(--z-text) 12%, transparent)" }} />
+                <span className="text-xs uppercase tracking-[0.18em]" style={{ color: "var(--z-textMuted)" }}>
+                  or
+                </span>
+                <div className="flex-1 h-px" style={{ background: "color-mix(in srgb, var(--z-text) 12%, transparent)" }} />
+              </div>
+            )}
+
             <div
               className="flex mb-6 rounded-lg overflow-hidden"
               style={{ border: "1px solid color-mix(in srgb, var(--z-text) 15%, transparent)" }}

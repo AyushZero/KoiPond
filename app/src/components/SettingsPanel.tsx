@@ -51,11 +51,24 @@ export function SettingsPanel({ open, onClose, theme, setTheme, roomName, roomCo
 
   const setMode = (mode: ThemeMode) => setTheme((t) => ({ ...t, mode }));
 
+  const [copiedLink, setCopiedLink] = useState(false);
+
   const copyCode = async () => {
     try {
       await navigator.clipboard.writeText(roomCode);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
+
+  const copyLink = async () => {
+    try {
+      const url = `${window.location.origin}/?room=${encodeURIComponent(roomCode)}`;
+      await navigator.clipboard.writeText(url);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 1500);
     } catch {
       /* clipboard unavailable */
     }
@@ -150,10 +163,12 @@ export function SettingsPanel({ open, onClose, theme, setTheme, roomName, roomCo
           </h3>
           <div className="flex items-baseline justify-between gap-3 mb-3">
             <span className="text-lg">{roomName}</span>
+          </div>
+          <div className="flex items-center gap-2 mb-3">
             <button
               type="button"
               onClick={copyCode}
-              className="text-base px-3 py-1 rounded-md transition-opacity hover:opacity-80"
+              className="flex-1 text-sm py-2 px-3 rounded-md transition-opacity hover:opacity-85 text-center"
               style={{
                 background: "var(--z-surface)",
                 color: "var(--z-accent)",
@@ -161,11 +176,23 @@ export function SettingsPanel({ open, onClose, theme, setTheme, roomName, roomCo
               }}
               aria-label={`Copy room code ${roomCode}`}
             >
-              {copied ? "copied" : roomCode}
+              {copied ? "code copied" : `code: ${roomCode}`}
+            </button>
+            <button
+              type="button"
+              onClick={copyLink}
+              className="flex-1 text-sm py-2 px-3 rounded-md transition-opacity hover:opacity-85 text-center"
+              style={{
+                background: "var(--z-surface)",
+                color: "var(--z-accent)",
+              }}
+              aria-label="Copy invite link to clipboard"
+            >
+              {copiedLink ? "link copied!" : "copy link"}
             </button>
           </div>
-          <p className="text-sm mb-3" style={{ color: "var(--z-textMuted)" }}>
-            Share the code with a friend — they join from their own device.
+          <p className="text-sm mb-4" style={{ color: "var(--z-textMuted)" }}>
+            Share the code or link with a friend — they join from their own device.
           </p>
           <button
             type="button"
@@ -175,6 +202,37 @@ export function SettingsPanel({ open, onClose, theme, setTheme, roomName, roomCo
           >
             leave room
           </button>
+        </section>
+
+        <section className="mb-10">
+          <h3 className="text-xs uppercase tracking-[0.18em] mb-3" style={{ color: "var(--z-textMuted)" }}>
+            Atmosphere
+          </h3>
+          <div
+            className="flex items-center justify-between py-3 px-3 rounded-lg"
+            style={{ background: "var(--z-surface)" }}
+          >
+            <div>
+              <div className="text-base" style={{ color: "var(--z-text)" }}>
+                Ambient Koi
+              </div>
+              <div className="text-xs italic" style={{ color: "var(--z-textMuted)" }}>
+                Gentle koi swimming in background
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setTheme((t) => ({ ...t, showKoi: !t.showKoi }))}
+              className="px-3 py-1.5 rounded-full text-xs uppercase tracking-wider transition-colors"
+              style={{
+                background: theme.showKoi ? "var(--z-accent)" : "transparent",
+                color: theme.showKoi ? "var(--z-bg)" : "var(--z-textMuted)",
+                border: "1px solid color-mix(in srgb, var(--z-text) 20%, transparent)",
+              }}
+            >
+              {theme.showKoi ? "enabled" : "off"}
+            </button>
+          </div>
         </section>
 
         <section>

@@ -54,19 +54,28 @@ export const FONTS: FontOption[] = [
 export interface StoredThemeShape {
   mode: ThemeMode;
   font: string;
+  showKoi: boolean;
   overrides: Partial<Record<ThemeMode, Partial<TokenValues>>>;
 }
 
-const STORAGE_KEY = "zero:theme";
+const STORAGE_KEY = "koi:theme";
 
 export function loadTheme(): StoredThemeShape {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as StoredThemeShape;
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem("zero:theme");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        mode: parsed.mode ?? "dark",
+        font: parsed.font ?? "newsreader",
+        showKoi: parsed.showKoi ?? true,
+        overrides: parsed.overrides ?? {},
+      };
+    }
   } catch {
     /* ignore */
   }
-  return { mode: "dark", font: "newsreader", overrides: {} };
+  return { mode: "dark", font: "newsreader", showKoi: true, overrides: {} };
 }
 
 export function saveTheme(t: StoredThemeShape) {

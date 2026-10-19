@@ -11,11 +11,11 @@ interface Persisted {
   sessionId: string | null;
 }
 
-const KEY = "zero:timer";
+const KEY = "koi:timer";
 
 function load(): Persisted {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(KEY) || localStorage.getItem("zero:timer");
     if (raw) return JSON.parse(raw) as Persisted;
   } catch {
     /* ignore */

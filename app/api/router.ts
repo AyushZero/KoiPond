@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { rooms, roomMembers, sessions, users } from "@db/schema";
 
-const MIN_SESSION_SEC = 25 * 60; // sessions under this don't count
+const MIN_SESSION_SEC = 10 * 60; // sessions under this don't count
 
 function roomCode() {
   const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -83,15 +83,26 @@ export const appRouter = createRouter({
 
     /** Everything the home screen needs: my room, members, feed, live sessions. */
     state: publicQuery
-      .input(z.object({ userId: z.string() }))
+      .input(z.object({ userId: z.string(), roomId: z.string().optional() }))
       .query(async ({ input }) => {
         const db = getDb();
-        const membership = await db
-          .select({ room: rooms })
-          .from(roomMembers)
-          .innerJoin(rooms, eq(rooms.id, roomMembers.roomId))
-          .where(eq(roomMembers.userId, input.userId))
-          .limit(1);
+        let membership;
+        if (input.roomId) {
+          membership = await db
+            .select({ room: rooms })
+            .from(roomMembers)
+            .innerJoin(rooms, eq(rooms.id, roomMembers.roomId))
+            .where(and(eq(roomMembers.userId, input.userId), eq(roomMembers.roomId, input.roomId)))
+            .limit(1);
+        } else {
+          membership = await db
+            .select({ room: rooms })
+            .from(roomMembers)
+            .innerJoin(rooms, eq(rooms.id, roomMembers.roomId))
+            .where(eq(roomMembers.userId, input.userId))
+            .orderBy(desc(roomMembers.createdAt))
+            .limit(1);
+        }
         const room = membership[0]?.room ?? null;
         if (!room) return { room: null, members: [], feed: [], live: [] };
 
@@ -172,6 +183,80 @@ export const appRouter = createRouter({
       .mutation(async ({ input }) => {
         await getDb().delete(sessions).where(eq(sessions.id, input.sessionId));
         return { ok: true };
+      }),
+    recentRooms: publicQuery
+      .input(z.object({ userId: z.string() }))
+      .query(async ({ input }) => {
+        const db = getDb();
+        const memberRooms = await db
+          .select({ room: rooms, joinedAt: roomMembers.createdAt })
+          .from(roomMembers)
+          .innerJoin(rooms, eq(rooms.id, roomMembers.roomId))
+          .where(eq(roomMembers.userId, input.userId))
+          .orderBy(desc(roomMembers.createdAt))
+          .limit(10);
+        
+        const seen = new Set<string>();
+        const list = [];
+        for (const r of memberRooms) {
+          if (!seen.has(r.room.id)) {
+            seen.add(r.room.id);
+            list.push({ ...r.room, joinedAt: r.joinedAt });
+          }
+          if (list.length >= 5) break;
+        }
+        return list;
+      }),
+
+    leaderboard: publicQuery
+      .input(z.object({ roomId: z.string() }))
+      .query(async ({ input }) => {
+        const db = getDb();
+        const memberRows = await db
+          .select({ user: users })
+          .from(roomMembers)
+          .innerJoin(users, eq(users.id, roomMembers.userId))
+          .where(eq(roomMembers.roomId, input.roomId));
+
+        const sessionRows = await db
+          .select()
+          .from(sessions)
+          .where(and(eq(sessions.roomId, input.roomId), eq(sessions.counted, true)));
+
+        // Aggregate per user
+        const statsMap = new Map<
+          string,
+          { userId: string; userName: string; totalNetSec: number; totalWastedSec: number; sessionCount: number }
+        >();
+
+        for (const m of memberRows) {
+          statsMap.set(m.user.id, {
+            userId: m.user.id,
+            userName: m.user.name,
+            totalNetSec: 0,
+            totalWastedSec: 0,
+            sessionCount: 0,
+          });
+        }
+
+        for (const s of sessionRows) {
+          let stat = statsMap.get(s.userId);
+          if (!stat) {
+            stat = {
+              userId: s.userId,
+              userName: "Unknown",
+              totalNetSec: 0,
+              totalWastedSec: 0,
+              sessionCount: 0,
+            };
+            statsMap.set(s.userId, stat);
+          }
+          stat.totalNetSec += s.netSec;
+          stat.totalWastedSec += s.wastedSec;
+          stat.sessionCount += 1;
+        }
+
+        return Array.from(statsMap.values()).sort((a, b) => b.totalNetSec - a.totalNetSec);
       }),
   }),
 });

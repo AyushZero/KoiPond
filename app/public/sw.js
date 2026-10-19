@@ -1,4 +1,4 @@
-const CACHE = "zero-v1";
+const CACHE = "koi-v1";
 const ASSETS = ["/", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/icon.svg"];
 
 self.addEventListener("install", (e) => {
