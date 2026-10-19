@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --z-bg: #1c1b19;
+    --z-surface: #272522;
+    --z-text: #ede7dd;
+    --z-textMuted: #a49b8e;
+    --z-accent: #d29a6a;
+    --z-danger: #a8584c;
+    --z-font: 'Newsreader', Georgia, serif;
+    --z-scheme: dark;
+    --radius: 0.5rem;
+    color-scheme: dark;
+  }
+
+  * {
+    border-color: color-mix(in srgb, var(--z-text) 12%, transparent);
+  }
+
+  html, body, #root {
+    min-height: 100dvh;
+  }
+
+  body {
+    background-color: var(--z-bg);
+    color: var(--z-text);
+    font-family: var(--z-font);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    transition: background-color 200ms ease-out, color 200ms ease-out;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--z-accent) 30%, transparent);
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--z-accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
