@@ -33,6 +33,27 @@
     transition: background-color 200ms ease-out, color 200ms ease-out;
   }
 
+  .abyss-mode {
+    isolation: isolate;
+    background: #070708 !important;
+    transition: background 900ms ease;
+  }
+
+  .abyss-mode .mx-auto { position: relative; z-index: 1; }
+  .abyss-mode .abyss-sky { display: block; }
+  .abyss-sky { display: none; position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; background: radial-gradient(circle at 50% 47%, color-mix(in srgb, var(--z-accent) 13%, #030303) 0, #070708 24%, #020203 72%); }
+  .abyss-sky::before, .abyss-sky::after { content: ""; position: absolute; width: 110vmax; height: 110vmax; top: 50%; left: 50%; border-radius: 50%; transform: translate(-50%, -50%); border: 1px solid color-mix(in srgb, var(--z-text) 13%, transparent); animation: abyss-pulse 7s ease-in-out infinite; }
+  .abyss-sky::after { width: 60vmax; height: 60vmax; border-color: color-mix(in srgb, var(--z-accent) 26%, transparent); animation-delay: -3s; }
+  .abyss-sky i { position: absolute; width: 2px; height: 2px; background: var(--z-text); border-radius: 50%; opacity: .5; box-shadow: 12vw -19vh 0 -1px var(--z-text), -33vw 17vh 0 0 var(--z-accent), 35vw 21vh 0 -1px var(--z-text), -28vw -29vh 0 0 var(--z-text), 29vw -35vh 0 0 var(--z-accent), -9vw 39vh 0 -1px var(--z-text); animation: star-drift 12s linear infinite; }
+  .abyss-sky i:nth-child(2) { top: 20%; left: 76%; animation-delay: -5s; opacity: .25; }
+  .abyss-sky i:nth-child(3) { top: 84%; left: 18%; animation-delay: -9s; opacity: .35; }
+  .abyss-koi { position: absolute; top: 21%; left: 15%; font-size: 4rem; color: color-mix(in srgb, var(--z-accent) 60%, transparent); transform: rotate(-30deg); animation: koi-drift 17s ease-in-out infinite; }
+  .abyss-koi.koi-two { top: 77%; left: 74%; font-size: 2.5rem; opacity: .55; animation-delay: -8s; animation-direction: reverse; }
+  .abyss-mode svg circle:first-child { stroke: color-mix(in srgb, var(--z-text) 25%, transparent); }
+  @keyframes abyss-pulse { 50% { transform: translate(-50%, -50%) scale(.7); opacity: .22; } }
+  @keyframes star-drift { to { transform: translate(9vw, -13vh); } }
+  @keyframes koi-drift { 50% { transform: translate(55vw, 38vh) rotate(150deg); opacity: .18; } }
+
   ::selection {
     background: color-mix(in srgb, var(--z-accent) 30%, transparent);
   }

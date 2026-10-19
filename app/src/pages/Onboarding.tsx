@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/providers/trpc";
 
 interface Props {
@@ -6,7 +6,7 @@ interface Props {
   onIdentified: (userId: string) => void;
   hasIdentity: boolean;
   userId: string | null;
-  onRoomReady?: () => void;
+  onRoomReady?: (roomId: string) => void;
 }
 
 export function Onboarding({ onIdentified, hasIdentity, userId, onRoomReady }: Props) {
@@ -20,6 +20,15 @@ export function Onboarding({ onIdentified, hasIdentity, userId, onRoomReady }: P
   const identify = trpc.zero.identify.useMutation();
   const createRoom = trpc.zero.createRoom.useMutation();
   const joinRoom = trpc.zero.joinRoom.useMutation();
+  const recentRooms = trpc.zero.recentRooms.useQuery({ userId: userId ?? "" }, { enabled: !!userId });
+
+  useEffect(() => {
+    const sharedCode = new URLSearchParams(window.location.search).get("room");
+    if (sharedCode) {
+      setTab("join");
+      setCode(sharedCode.toUpperCase());
+    }
+  }, []);
 
   const submitName = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,13 +53,15 @@ export function Onboarding({ onIdentified, hasIdentity, userId, onRoomReady }: P
     try {
       if (tab === "create") {
         if (!roomName.trim()) return;
-        await createRoom.mutateAsync({ userId, name: roomName.trim() });
+        const created = await createRoom.mutateAsync({ userId, name: roomName.trim() });
+        onRoomReady?.(created.id);
       } else {
         if (!code.trim()) return;
-        await joinRoom.mutateAsync({ userId, code: code.trim().toUpperCase() });
+        const joined = await joinRoom.mutateAsync({ userId, code: code.trim().toUpperCase() });
+        onRoomReady?.(joined.id);
       }
       // Home will refetch and pick up the room.
-      if (onRoomReady) onRoomReady();
+      if (onRoomReady) { /* active room is set above */ }
       else window.location.reload();
     } catch (err) {
       setError(tab === "join" ? "No room with that code." : "Couldn't create the room. Try again.");
@@ -64,7 +75,7 @@ export function Onboarding({ onIdentified, hasIdentity, userId, onRoomReady }: P
       <div className="w-full max-w-sm">
         <div className="mb-12 text-center">
           <div className="text-5xl mb-3" style={{ color: "var(--z-text)" }}>
-            Zero
+            Koi
           </div>
           <p className="italic" style={{ color: "var(--z-textMuted)" }}>
             study quietly, prove it softly
@@ -168,6 +179,23 @@ export function Onboarding({ onIdentified, hasIdentity, userId, onRoomReady }: P
                 {tab === "create" ? "create room" : "join room"}
               </button>
             </form>
+            {recentRooms.data && recentRooms.data.length > 0 && (
+              <div className="mt-8">
+                <p className="text-xs uppercase tracking-[0.18em] mb-3" style={{ color: "var(--z-textMuted)" }}>Your rooms</p>
+                <div className="flex flex-col gap-2">
+                  {recentRooms.data.map((room) => (
+                    <button key={room.id} type="button" disabled={busy} onClick={async () => {
+                      setBusy(true); setError("");
+                      try { const joined = await joinRoom.mutateAsync({ userId: userId!, code: room.code }); onRoomReady?.(joined.id); }
+                      catch { setError("Couldn't rejoin that room."); }
+                      finally { setBusy(false); }
+                    }} className="text-left flex items-center justify-between px-3 py-2 rounded-lg transition-opacity hover:opacity-75" style={{ background: "var(--z-surface)" }}>
+                      <span>{room.name}</span><span className="text-xs tracking-[0.16em]" style={{ color: "var(--z-accent)" }}>{room.code}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

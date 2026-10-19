@@ -3,6 +3,7 @@ import { trpc } from "@/providers/trpc";
 import { useStopwatch } from "@/hooks/useStopwatch";
 import { TimerRing } from "@/components/TimerRing";
 import { Feed, type FeedSession } from "@/components/Feed";
+import { RoomStats, type RoomStat } from "@/components/RoomStats";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { Onboarding } from "@/pages/Onboarding";
 import { fmtClock, fmtDur } from "@/lib/format";
@@ -15,7 +16,8 @@ import {
 
 const UID_KEY = "zero:uid";
 const GOAL_KEY = "zero:goal";
-const GOALS = [45, 90, 120, 180];
+const ROOM_KEY = "zero:active-room";
+const GOALS = [10, 45, 90, 120, 180];
 
 const QUOTES = [
   "the work is the reward",
@@ -27,6 +29,7 @@ const QUOTES = [
 
 export default function Home() {
   const [uid, setUid] = useState<string | null>(() => localStorage.getItem(UID_KEY));
+  const [activeRoomId, setActiveRoomId] = useState<string | null>(() => localStorage.getItem(ROOM_KEY));
   const [theme, setThemeState] = useState<StoredThemeShape>(loadTheme);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [goalMin, setGoalMin] = useState<number>(() => Number(localStorage.getItem(GOAL_KEY)) || 120);
@@ -34,14 +37,17 @@ export default function Home() {
   const [wastedMin, setWastedMin] = useState("0");
   const [note, setNote] = useState("");
   const [nowTick, setNowTick] = useState(0);
+  const [endless, setEndless] = useState(false);
+  const [view, setView] = useState<"feed" | "stats">("feed");
 
   const timer = useStopwatch();
   const utils = trpc.useUtils();
 
   const state = trpc.zero.state.useQuery(
-    { userId: uid ?? "" },
+    { userId: uid ?? "", roomId: activeRoomId ?? undefined },
     { enabled: !!uid, refetchInterval: 8000 },
   );
+  const stats = trpc.zero.stats.useQuery({ roomId: state.data?.room?.id ?? "" }, { enabled: !!state.data?.room, refetchInterval: 8000 });
 
   const startSession = trpc.zero.startSession.useMutation();
   const stopSession = trpc.zero.stopSession.useMutation();
@@ -96,7 +102,7 @@ export default function Home() {
         hasIdentity
         userId={uid}
         onIdentified={() => {}}
-        onRoomReady={() => utils.zero.state.invalidate()}
+        onRoomReady={(roomId) => { localStorage.setItem(ROOM_KEY, roomId); setActiveRoomId(roomId); utils.zero.state.invalidate(); }}
       />
     );
   }
@@ -107,7 +113,7 @@ export default function Home() {
   const live = ((state.data?.live ?? []) as FeedSession[]).filter((s) => s.userId !== uid);
 
   const goalSec = goalMin * 60;
-  const progress = timer.elapsedSec / goalSec;
+  const progress = endless ? 1 : timer.elapsedSec / goalSec;
 
   const handleStart = async () => {
     if (!room) return;
@@ -140,6 +146,7 @@ export default function Home() {
       /* still reset locally */
     }
     timer.reset();
+    setEndless(false);
     setStopOpen(false);
     utils.zero.state.invalidate();
   };
@@ -153,6 +160,7 @@ export default function Home() {
       }
     }
     timer.reset();
+    setEndless(false);
     setStopOpen(false);
     utils.zero.state.invalidate();
   };
@@ -163,12 +171,13 @@ export default function Home() {
   );
 
   return (
-    <main className="min-h-dvh" style={{ background: "var(--z-bg)" }}>
+    <main className={`min-h-dvh ${endless && timer.status !== "idle" ? "abyss-mode" : ""}`} style={{ background: "var(--z-bg)" }}>
+      {endless && timer.status !== "idle" && <div className="abyss-sky" aria-hidden><i /><i /><i /><span className="abyss-koi">◌</span><span className="abyss-koi koi-two">◌</span></div>}
       <div className="mx-auto max-w-xl px-6 pb-24">
         {/* header */}
         <header className="flex items-baseline justify-between pt-8 pb-6">
           <div>
-            <div className="text-2xl leading-none">Zero</div>
+            <div className="text-2xl leading-none">Koi</div>
             {room && (
               <div className="text-sm italic mt-1" style={{ color: "var(--z-textMuted)" }}>
                 {room.name}
@@ -198,22 +207,25 @@ export default function Home() {
                 {fmtClock(timer.elapsedSec)}
               </div>
               <div className="text-sm italic mt-3 px-8 text-center" style={{ color: "var(--z-textMuted)" }}>
-                {timer.status === "idle" ? quote : `of ${fmtDur(goalSec)}`}
+                {timer.status === "idle" ? quote : endless ? "into the abyss" : `of ${fmtDur(goalSec)}`}
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-3 mt-10">
             {timer.status === "idle" && (
-              <button
-                type="button"
-                onClick={handleStart}
-                disabled={startSession.isPending}
-                className="px-10 py-3.5 rounded-full text-lg transition-opacity disabled:opacity-40 hover:opacity-85"
-                style={{ background: "var(--z-accent)", color: "var(--z-bg)" }}
-              >
-                begin
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleStart}
+                  disabled={startSession.isPending}
+                  className="px-10 py-3.5 rounded-full text-lg transition-opacity disabled:opacity-40 hover:opacity-85"
+                  style={{ background: "var(--z-accent)", color: "var(--z-bg)" }}
+                >
+                  begin
+                </button>
+                <button type="button" onClick={() => { setEndless(true); handleStart(); }} disabled={startSession.isPending} className="w-12 h-12 rounded-full text-xl transition-transform hover:scale-110" style={{ background: "var(--z-surface)", color: "var(--z-accent)", border: "1px solid color-mix(in srgb, var(--z-accent) 35%, transparent)" }} aria-label="Begin endless focus mode" title="Endless focus mode">∞</button>
+              </>
             )}
             {timer.status === "running" && (
               <>
@@ -266,7 +278,7 @@ export default function Home() {
           </div>
 
           {timer.status === "idle" && (
-            <div className="flex items-center gap-2 mt-8" role="group" aria-label="Session goal">
+            <div className="flex flex-wrap justify-center items-center gap-2 mt-8" role="group" aria-label="Session goal">
               {GOALS.map((g) => (
                 <button
                   key={g}
@@ -285,19 +297,18 @@ export default function Home() {
                   {fmtDur(g * 60)}
                 </button>
               ))}
+              <button type="button" onClick={() => { const value = window.prompt("Custom session length in minutes", String(goalMin)); const minutes = Number(value); if (Number.isFinite(minutes) && minutes >= 10 && minutes <= 1440) { setGoalMin(Math.round(minutes)); localStorage.setItem(GOAL_KEY, String(Math.round(minutes))); } }} className="px-3 py-1.5 rounded-full text-sm" style={{ color: "var(--z-textMuted)", border: "1px solid color-mix(in srgb, var(--z-text) 16%, transparent)" }}>custom</button>
             </div>
           )}
         </section>
 
         {/* feed */}
         <section aria-label="Room feed">
-          <h2
-            className="text-xs uppercase tracking-[0.18em] pb-2"
-            style={{ color: "var(--z-textMuted)" }}
-          >
-            The feed
-          </h2>
-          <Feed
+          <div className="flex items-center justify-between pb-2">
+            <h2 className="text-xs uppercase tracking-[0.18em]" style={{ color: "var(--z-textMuted)" }}>{view === "feed" ? "The feed" : "Room standings"}</h2>
+            <button type="button" onClick={() => setView(v => v === "feed" ? "stats" : "feed")} className="text-sm underline underline-offset-4" style={{ color: "var(--z-textMuted)" }}>{view === "feed" ? "statistics" : "feed"}</button>
+          </div>
+          {view === "feed" ? <Feed
             live={live}
             feed={feed}
             meId={uid}
@@ -305,7 +316,7 @@ export default function Home() {
               void nowTick;
               return Math.max(0, Math.floor((Date.now() - new Date(s.startedAt).getTime()) / 1000));
             }}
-          />
+          /> : <RoomStats rows={(stats.data ?? []) as RoomStat[]} meId={uid} />}
         </section>
       </div>
 
@@ -378,7 +389,7 @@ export default function Home() {
 
             <p className="mb-6 text-base" style={{ color: "var(--z-textMuted)" }}>
               Net: <span className="text-xl" style={{ color: netPreview >= 1500 ? "var(--z-accent)" : "var(--z-danger)" }}>{fmtDur(netPreview)}</span>
-              {netPreview < 1500 && <span className="text-sm"> — under 25m, won't count</span>}
+              {netPreview < 600 && <span className="text-sm"> — under 10m, won't count</span>}
             </p>
 
             <div className="flex items-center gap-3">
@@ -418,6 +429,8 @@ export default function Home() {
           }}
           onLeave={async () => {
             await leaveRoom.mutateAsync({ userId: uid, roomId: room.id });
+            localStorage.removeItem(ROOM_KEY);
+            setActiveRoomId(null);
             setSettingsOpen(false);
             utils.zero.state.invalidate();
           }}
