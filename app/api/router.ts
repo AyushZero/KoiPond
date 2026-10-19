@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { rooms, roomMembers, sessions, users } from "@db/schema";
 
-const MIN_SESSION_SEC = 25 * 60; // sessions under this don't count
+const MIN_SESSION_SEC = 10 * 60; // sessions under this don't count
 
 function roomCode() {
   const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -81,16 +81,30 @@ export const appRouter = createRouter({
         return { ok: true };
       }),
 
+    /** A small room history lets a returning device move between its rooms. */
+    recentRooms: publicQuery
+      .input(z.object({ userId: z.string() }))
+      .query(async ({ input }) => {
+        const rows = await getDb()
+          .select({ room: rooms, joinedAt: roomMembers.createdAt })
+          .from(roomMembers)
+          .innerJoin(rooms, eq(rooms.id, roomMembers.roomId))
+          .where(eq(roomMembers.userId, input.userId))
+          .orderBy(desc(roomMembers.createdAt))
+          .limit(5);
+        return rows.map((row) => row.room);
+      }),
+
     /** Everything the home screen needs: my room, members, feed, live sessions. */
     state: publicQuery
-      .input(z.object({ userId: z.string() }))
+      .input(z.object({ userId: z.string(), roomId: z.string().optional() }))
       .query(async ({ input }) => {
         const db = getDb();
         const membership = await db
           .select({ room: rooms })
           .from(roomMembers)
           .innerJoin(rooms, eq(rooms.id, roomMembers.roomId))
-          .where(eq(roomMembers.userId, input.userId))
+          .where(input.roomId ? and(eq(roomMembers.userId, input.userId), eq(roomMembers.roomId, input.roomId)) : eq(roomMembers.userId, input.userId))
           .limit(1);
         const room = membership[0]?.room ?? null;
         if (!room) return { room: null, members: [], feed: [], live: [] };
@@ -115,6 +129,26 @@ export const appRouter = createRouter({
           feed: feed.filter((f) => f.session.endedAt !== null).map((f) => ({ ...f.session, userName: f.userName })),
           live: feed.filter((f) => f.session.endedAt === null).map((f) => ({ ...f.session, userName: f.userName })),
         };
+      }),
+
+    stats: publicQuery
+      .input(z.object({ roomId: z.string() }))
+      .query(async ({ input }) => {
+        const rows = await getDb()
+          .select({
+            userId: users.id,
+            userName: users.name,
+            studiedSec: sql<number>`coalesce(sum(${sessions.netSec}), 0)`,
+            wastedSec: sql<number>`coalesce(sum(${sessions.wastedSec}), 0)`,
+            sessions: sql<number>`count(${sessions.id})`,
+          })
+          .from(roomMembers)
+          .innerJoin(users, eq(users.id, roomMembers.userId))
+          .leftJoin(sessions, and(eq(sessions.userId, users.id), eq(sessions.roomId, input.roomId), eq(sessions.counted, true)))
+          .where(eq(roomMembers.roomId, input.roomId))
+          .groupBy(users.id, users.name)
+          .orderBy(desc(sql`coalesce(sum(${sessions.netSec}), 0)`));
+        return rows.map((row) => ({ ...row, studiedSec: Number(row.studiedSec), wastedSec: Number(row.wastedSec), sessions: Number(row.sessions) }));
       }),
 
     startSession: publicQuery

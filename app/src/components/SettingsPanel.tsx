@@ -53,7 +53,8 @@ export function SettingsPanel({ open, onClose, theme, setTheme, roomName, roomCo
 
   const copyCode = async () => {
     try {
-      await navigator.clipboard.writeText(roomCode);
+      const link = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
+      await navigator.clipboard.writeText(link);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -161,11 +162,11 @@ export function SettingsPanel({ open, onClose, theme, setTheme, roomName, roomCo
               }}
               aria-label={`Copy room code ${roomCode}`}
             >
-              {copied ? "copied" : roomCode}
+              {copied ? "link copied" : roomCode}
             </button>
           </div>
           <p className="text-sm mb-3" style={{ color: "var(--z-textMuted)" }}>
-            Share the code with a friend — they join from their own device.
+            Tap the code to copy a join link. They can also enter the code manually.
           </p>
           <button
             type="button"

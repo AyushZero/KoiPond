@@ -102,7 +102,7 @@ export function Feed({ live, feed, meId, liveElapsed }: Props) {
                 )}
                 {!s.counted && (
                   <div className="text-sm mt-0.5" style={{ color: "var(--z-danger)" }}>
-                    under 25 minutes — didn't count
+                    under 10 minutes — didn't count
                   </div>
                 )}
               </div>
